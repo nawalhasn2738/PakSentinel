@@ -1,0 +1,23 @@
+artifact_path: file:///C:/Users/khapl/Documents/sem 8/PakSentinel/mlruns/1/models/m-e40b1447157c4909b1e6ff3881b2afcb/artifacts
+flavors:
+  python_function:
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.sklearn
+    model_path: model.pkl
+    predict_fn: predict
+    python_version: 3.11.9
+  sklearn:
+    code: null
+    pickled_model: model.pkl
+    serialization_format: cloudpickle
+    sklearn_version: 1.8.0
+    skops_trusted_types: null
+mlflow_version: 3.11.1
+model_id: m-e40b1447157c4909b1e6ff3881b2afcb
+model_size_bytes: 40701
+model_uuid: m-e40b1447157c4909b1e6ff3881b2afcb
+prompts: null
+run_id: c16aeeb5dc0a4a6fb7d744fcbfa62af3
+utc_time_created: '2026-04-23 16:48:28.430058'
