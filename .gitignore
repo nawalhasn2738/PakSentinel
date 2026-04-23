@@ -1,0 +1,30 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Data and Models - KEEP THESE OUT OF GITHUB
+data/raw/
+data/processed/
+data/embeddings/
+*.csv
+*.tsv
+*.parquet
+*.h5
+*.model
+*.pkl
+*.npy
+
+# Virtual Environments
+venv/
+env/
+.env
+.venv
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints
+
+# IDE / OS specific files
+.vscode/
+.idea/
+.DS_Store
