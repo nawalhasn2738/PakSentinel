@@ -69,7 +69,8 @@ def run_ablation():
     # Task 6: 6 Ablation Configurations
     configs = [
         {"name": "Config 1 - Base", "remove_stopwords": False, "stem": False, "lemma": False, "min_len": 0, "max_features": 5000},
-        {"name": "Config 2 - No Stopwords", "remove_stopwords": True, "stem": False, "lemma": False, "min_len": 0, "max_features": 5000},
+        {"name": "Config 2 - NLTK Stopwords", "remove_stopwords": True, "stem": False, "lemma": False, "min_len": 0, "max_features": 5000},
+        {"name": "Config 2.5 - Custom Stopwords", "remove_stopwords": True, "stem": False, "lemma": False, "min_len": 0, "max_features": 5000}, # Added for Custom vs NLTK comparison
         {"name": "Config 3 - Stemming", "remove_stopwords": True, "stem": True, "lemma": False, "min_len": 0, "max_features": 5000},
         {"name": "Config 4 - Lemmatization", "remove_stopwords": True, "stem": False, "lemma": True, "min_len": 0, "max_features": 5000},
         {"name": "Config 5 - TF-IDF Max 1000", "remove_stopwords": True, "stem": False, "lemma": True, "min_len": 0, "max_features": 1000},

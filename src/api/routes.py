@@ -68,6 +68,17 @@ async def classify_text(request: Request, req: ClassifyRequest) -> Dict[str, Any
         lemma=True,
         min_len=0
     )
+    
+    vec_input = state.vectorizer.transform([processed_text])
+    
+    # Predict
+    if hasattr(state.model, 'predict_proba'):
+        probs = state.model.predict_proba(vec_input)[0]
+        pred = state.model.predict(vec_input)[0]
+    else:
+        pred = state.model.predict(vec_input)[0]
+        probs = [0.0, 0.0]
+        probs[pred] = 1.0
 
     # Handle feature importance for different model types
     feature_impacts = []
@@ -132,6 +143,18 @@ async def retrieve_similar(request: Request, req: RetrieveRequest) -> Dict[str, 
     if state.tfidf_matrix is None or state.claims_db is None:
         raise HTTPException(status_code=503, detail="Database uninitialized")
         
+    cleaner = PakSentinelCleaner()
+    cleaned = cleaner.clean_text(req.text)
+    
+    from experiments.ablation_study import apply_preprocessing
+    processed_text = apply_preprocessing(
+        cleaned,
+        remove_stopwords=True,
+        stem=False,
+        lemma=True,
+        min_len=0
+    )
+    
     vec_input = state.vectorizer.transform([processed_text])
     sim_scores = cosine_similarity(vec_input, state.tfidf_matrix).flatten()
     
