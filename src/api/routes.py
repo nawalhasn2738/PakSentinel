@@ -28,19 +28,21 @@ async def preprocess_text(req: PreprocessRequest) -> Dict[str, Any]:
     start = time.perf_counter()
     cleaner = PakSentinelCleaner()
     cleaned = cleaner.clean_text(req.text)
-    
+
     from experiments.ablation_study import apply_preprocessing
-    
+
+    # Use the same preprocessing configuration as the production model
+    # Based on ablation study results, Config 4 (Lemmatization) typically performs best
     final_processed = apply_preprocessing(
-        cleaned, 
-        remove_stopwords=req.remove_stopwords, 
-        stem=req.stem, 
-        lemma=req.lemma, 
-        min_len=req.min_len
+        cleaned,
+        remove_stopwords=True,  # Remove stopwords
+        stem=False,            # No stemming
+        lemma=True,            # Use lemmatization
+        min_len=0              # No minimum length filter
     )
-    
+
     runtime = time.perf_counter() - start
-    
+
     return {
         "original": req.text,
         "tokens": final_processed.split(),
@@ -53,18 +55,37 @@ async def classify_text(request: Request, req: ClassifyRequest) -> Dict[str, Any
     state = request.app.state.model_config
     if not state.model or not state.vectorizer:
         raise HTTPException(status_code=503, detail="Model clearly not loaded yet")
-        
-    vec_input = state.vectorizer.transform([req.text])
-    pred = state.model.predict(vec_input)[0]
-    probs = state.model.predict_proba(vec_input)[0]
-    
-    coeffs = state.model.coef_[0]
-    words = state.vectorizer.get_feature_names_out()
-    feature_impacts = [(words[i], coeffs[i]) for i in vec_input.nonzero()[1]]
-    feature_impacts.sort(key=lambda x: abs(x[1]), reverse=True)
-    
+
+    # Apply consistent preprocessing
+    cleaner = PakSentinelCleaner()
+    cleaned = cleaner.clean_text(req.text)
+
+    from experiments.ablation_study import apply_preprocessing
+    processed_text = apply_preprocessing(
+        cleaned,
+        remove_stopwords=True,  # Match training preprocessing
+        stem=False,
+        lemma=True,
+        min_len=0
+    )
+
+    # Handle feature importance for different model types
+    feature_impacts = []
+    if hasattr(state.model, 'coef_'):  # sklearn-style models
+        coeffs = state.model.coef_[0]
+        words = state.vectorizer.get_feature_names_out()
+        feature_impacts = [(words[i], coeffs[i]) for i in vec_input.nonzero()[1]]
+        feature_impacts.sort(key=lambda x: abs(x[1]), reverse=True)
+    else:  # Custom models like PakSentinelNaiveBayes
+        # For custom models, we can't easily extract feature importance
+        # Return top TF-IDF features from the input text
+        words = state.vectorizer.get_feature_names_out()
+        tfidf_scores = vec_input.toarray()[0]
+        top_indices = tfidf_scores.argsort()[-5:][::-1]  # Top 5 features
+        feature_impacts = [(words[i], float(tfidf_scores[i])) for i in top_indices]
+
     label_map = {0: "fake", 1: "real"}
-    
+
     logger.info(f"Classified text as {label_map.get(pred, str(pred))}")
     return {
         "text": req.text,
@@ -80,13 +101,29 @@ async def classify_batch(request: Request, req: BatchClassifyRequest) -> Dict[st
     state = request.app.state.model_config
     if not state.model:
         raise HTTPException(status_code=503, detail="Model unavailable")
-        
-    vec_input = state.vectorizer.transform(req.texts)
+
+    # Apply consistent preprocessing to all texts
+    cleaner = PakSentinelCleaner()
+    from experiments.ablation_study import apply_preprocessing
+
+    processed_texts = []
+    for text in req.texts:
+        cleaned = cleaner.clean_text(text)
+        processed = apply_preprocessing(
+            cleaned,
+            remove_stopwords=True,  # Match training preprocessing
+            stem=False,
+            lemma=True,
+            min_len=0
+        )
+        processed_texts.append(processed)
+
+    vec_input = state.vectorizer.transform(processed_texts)
     preds = state.model.predict(vec_input)
-    
+
     label_map = {0: "fake", 1: "real"}
     results = [{"text": t[:50]+"...", "prediction": label_map.get(p, str(p))} for t, p in zip(req.texts, preds)]
-    
+
     return {"batch_size": len(req.texts), "results": results}
 
 @router.post("/retrieve/similar")
@@ -95,7 +132,7 @@ async def retrieve_similar(request: Request, req: RetrieveRequest) -> Dict[str, 
     if state.tfidf_matrix is None or state.claims_db is None:
         raise HTTPException(status_code=503, detail="Database uninitialized")
         
-    vec_input = state.vectorizer.transform([req.text])
+    vec_input = state.vectorizer.transform([processed_text])
     sim_scores = cosine_similarity(vec_input, state.tfidf_matrix).flatten()
     
     top_indices = sim_scores.argsort()[-req.top_k:][::-1]

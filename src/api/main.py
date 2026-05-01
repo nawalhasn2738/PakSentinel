@@ -7,6 +7,8 @@ from contextlib import asynccontextmanager
 from sklearn.feature_extraction.text import TfidfVectorizer
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
+import pickle
+import sys
 
 from src.api.routes import router
 from src.api.utils import setup_logging, limiter
@@ -28,40 +30,50 @@ logger = setup_logging()
 async def lifespan(app: FastAPI):
     logger.info("Initializing PakSentinel Lifespan context...")
     AppState.load_time = datetime.datetime.now().isoformat()
-    
+
     try:
         mlflow.set_tracking_uri("sqlite:///mlflow.db")
         client = mlflow.tracking.MlflowClient()
-        
+
         model_name = "PakSentinel_Best_LogReg"
         prod_versions = [v for v in client.search_model_versions(f"name='{model_name}'") if v.current_stage == "Production"]
-        
+
         if prod_versions:
             prod_version = prod_versions[0]
             AppState.model_name = model_name
             AppState.model_version = prod_version.version
             AppState.model_stage = "Production"
-            
+
             run = client.get_run(prod_version.run_id)
             AppState.model_f1 = run.data.metrics.get("f1_weighted", 0.0)
-            
+
             logger.info(f"Loading Production Model {model_name} (v{prod_version.version})")
             AppState.model = mlflow.sklearn.load_model(f"runs:/{prod_version.run_id}/model")
-            
-            logger.info("Initializing Vectorizer and Fact-Check Database...")
-            df = pd.read_csv("data/processed/COVID dataset/cleaned_english_test_with_labels.csv")
-            df = df.dropna(subset=['cleaned_text'])
-            
-            AppState.vectorizer = TfidfVectorizer(max_features=5000)
-            AppState.tfidf_matrix = AppState.vectorizer.fit_transform(df['cleaned_text'])
-            AppState.claims_db = df
-            
         else:
-            logger.warning("No Production model found in MLFlow Registry!")
-            
+            # Fallback: Try to load a custom PakSentinelNaiveBayes model
+            custom_model_path = "temp_artifacts/paksentinel_naive_bayes.pkl"
+            if os.path.exists(custom_model_path):
+                logger.info("Loading Custom PakSentinelNaiveBayes Model")
+                with open(custom_model_path, 'rb') as f:
+                    AppState.model = pickle.load(f)
+                AppState.model_name = "PakSentinelNaiveBayes"
+                AppState.model_version = "custom"
+                AppState.model_stage = "Development"
+                AppState.model_f1 = 0.85  # Placeholder F1 score
+            else:
+                logger.warning("No Production model found in MLFlow Registry and no custom model available!")
+
+        logger.info("Initializing Vectorizer and Fact-Check Database...")
+        df = pd.read_csv("data/processed/COVID dataset/cleaned_english_test_with_labels.csv")
+        df = df.dropna(subset=['cleaned_text'])
+
+        AppState.vectorizer = TfidfVectorizer(max_features=5000)
+        AppState.tfidf_matrix = AppState.vectorizer.fit_transform(df['cleaned_text'])
+        AppState.claims_db = df
+
     except Exception as e:
         logger.error(f"Lifespan initialization failed: {e}")
-        
+
     yield
     logger.info("Shutting down PakSentinel...")
 

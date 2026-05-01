@@ -52,3 +52,46 @@ A lightweight, lightning-fast web backend (`src/api`).
    python -m uvicorn src.api.main:app --reload
    ```
 3. Open `http://127.0.0.1:8000/docs` in your browser to view the interactive API playground.
+
+## 🏗️ FastAPI System Architecture
+
+```mermaid
+graph TD
+    Client([Client / Frontend])
+    
+    subrange API Gateway
+        FastAPI[FastAPI App]
+        SlowAPI[SlowAPI Rate Limiter]
+        Pydantic[Pydantic Validators]
+    end
+    
+    subrange Core NLP
+        Lifespan[Lifespan Context Manager]
+        Preprocess[Preprocessing Pipeline]
+        Vectorizer[TF-IDF Vectorizer]
+    end
+    
+    subrange ML Models
+        MLFlow[MLFlow Registry SQLite]
+        LogReg[Production Logistic Regression]
+        SimDB[Similar Claims Database]
+    end
+    
+    Client -- HTTP Requests --> SlowAPI
+    SlowAPI -- 100 req/min --> FastAPI
+    FastAPI --> Pydantic
+    
+    Pydantic -- Validated Payload --> Preprocess
+    Preprocess --> Vectorizer
+    
+    Lifespan -. Loads at Startup .-> MLFlow
+    MLFlow -. Serves Best Model .-> LogReg
+    
+    Vectorizer --> LogReg
+    Vectorizer --> SimDB
+    
+    LogReg -- Confidence & Prediction --> FastAPI
+    SimDB -- Top-K Cosine Similarity --> FastAPI
+    
+    FastAPI -- JSON Response --> Client
+```

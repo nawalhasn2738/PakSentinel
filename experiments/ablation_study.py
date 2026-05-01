@@ -165,5 +165,34 @@ def run_ablation():
 
     print("\n--- Ablation Study Complete. Run 'mlflow ui' to view tracking dashboard ---")
 
+    # Generate Parallel Coordinates Plot
+    print("\nGenerating Parallel Coordinates Plot...")
+    try:
+        import plotly.express as px
+        runs = mlflow.search_runs(experiment_names=["PakSentinel_FakeNews"])
+        if not runs.empty:
+            # Select relevant columns for the plot
+            plot_df = runs[['params.remove_stopwords', 'params.stemming', 'params.lemmatization', 
+                            'params.min_len', 'params.vectorizer_max_features', 'metrics.f1_weighted']].copy()
+            
+            # Convert boolean/string params to numeric categorical for plotly
+            plot_df['remove_stopwords'] = plot_df['params.remove_stopwords'].apply(lambda x: 1 if str(x).lower() == 'true' else 0)
+            plot_df['stemming'] = plot_df['params.stemming'].apply(lambda x: 1 if str(x).lower() == 'true' else 0)
+            plot_df['lemmatization'] = plot_df['params.lemmatization'].apply(lambda x: 1 if str(x).lower() == 'true' else 0)
+            plot_df['min_len'] = pd.to_numeric(plot_df['params.min_len'])
+            plot_df['max_features'] = pd.to_numeric(plot_df['params.vectorizer_max_features'])
+            plot_df['f1_weighted'] = pd.to_numeric(plot_df['metrics.f1_weighted'])
+            
+            fig = px.parallel_coordinates(plot_df, 
+                                          dimensions=['remove_stopwords', 'stemming', 'lemmatization', 'min_len', 'max_features', 'f1_weighted'],
+                                          color='f1_weighted',
+                                          title="Ablation Study Parallel Coordinates")
+            
+            os.makedirs("temp_artifacts", exist_ok=True)
+            fig.write_image("temp_artifacts/parallel_coordinates.png")
+            print("Parallel coordinates plot saved to temp_artifacts/parallel_coordinates.png")
+    except Exception as e:
+        print(f"Failed to generate parallel coordinates plot: {e}. Ensure plotly and kaleido are installed.")
+
 if __name__ == "__main__":
     run_ablation()
